@@ -11,13 +11,11 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from analyze import (HALVINGS, RATE_REGIMES, DAYS_PER_YEAR, Z_THRESHOLD,
-                     BLUE, ORANGE, AQUA, YELLOW, GRAY, align_with_nasdaq, load_data)
+from analyze import (HALVINGS, RATE_REGIMES, REGIME_COLOR, DAYS_PER_YEAR, Z_THRESHOLD,
+                     BLUE, ORANGE, YELLOW, GRAY, align_with_nasdaq, load_data)
 
 st.set_page_config(page_title="비트코인 성숙도 대시보드", layout="wide")
 
-REGIME_COLOR = {"인상기 1": ORANGE, "인상기 2": ORANGE, "고금리 동결": YELLOW,
-                "동결": GRAY, "인하기 1": BLUE, "인하기 2": BLUE, "제로금리": AQUA}
 WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 
 
@@ -53,7 +51,8 @@ btc_all, nasdaq_all, rate_all = get_data()
 # 필터 (한 줄)
 # ---------------------------------------------------------------
 st.title("비트코인은 성숙한 자산이 되어가고 있는가?")
-st.caption("Binance BTCUSDT 일봉 · Yahoo Finance ^IXIC · FRED DFF  |  2017-08-17 ~ 2025-12-31")
+st.caption("Binance BTCUSDT 일봉 · Yahoo Finance ^IXIC · FRED DFF  |  "
+           f"{btc_all.index.min().date()} ~ {btc_all.index.max().date()}")
 
 min_d, max_d = btc_all.index.min().date(), btc_all.index.max().date()
 c1, c2, c3, c4 = st.columns([3, 1.3, 1.3, 1.3])

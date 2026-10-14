@@ -20,7 +20,7 @@ import yfinance as yf
 
 # 바이낸스 BTCUSDT 거래가 시작된 날부터
 START = "2017-08-17"
-END = "2025-12-31"
+END = "2026-10-13"
 DATA_DIR = Path("data")
 
 

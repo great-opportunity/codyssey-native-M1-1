@@ -43,8 +43,12 @@ RATE_REGIMES = [
     ("2020-03-16", "2022-03-16", "제로금리"),
     ("2022-03-17", "2023-07-26", "인상기 2"),
     ("2023-07-27", "2024-09-17", "고금리 동결"),
-    ("2024-09-18", "2025-12-31", "인하기 2"),
+    ("2024-09-18", "2025-12-10", "인하기 2"),
+    ("2025-12-11", "2026-09-16", "인하 후 동결"),
+    # 2026-09-17 DFF 3.63% → 3.88% 이후 유지 (데이터 기준 판단, 27일뿐이라 통계 해석에 주의)
+    ("2026-09-17", "2026-10-13", "재인상"),
 ]
+
 
 
 # ---------------------------------------------------------------
@@ -56,6 +60,11 @@ TEXT_SUB = "#52514e"
 GRID = "#e4e3df"
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
 GRAY = "#8a8985"
+
+# 국면 배경색: 인상 = 주황, 인하 = 파랑, 동결 = 회색/노랑, 제로금리 = 청록
+REGIME_COLOR = {"인상기 1": ORANGE, "인상기 2": ORANGE, "재인상": ORANGE,
+                "인하기 1": BLUE, "인하기 2": BLUE, "제로금리": AQUA,
+                "동결": GRAY, "인하 후 동결": GRAY, "고금리 동결": YELLOW}
 
 
 def pick_korean_font():
@@ -154,7 +163,7 @@ def q1_cycle(btc):
     cyc = pd.DataFrame(cycles)
     print("\n[사이클별 고점과 이후 저점]")
     print(cyc.round(1).to_string(index=False))
-    print("  * 2016 반감기 가격은 데이터 범위 밖. 마지막 저점은 2025-12-31까지만 본 값(진행 중)")
+    print(f"  * 2016 반감기 가격은 데이터 범위 밖. 마지막 저점은 데이터 끝({close.index[-1].date()})까지만 본 값(진행 중)")
 
     # 반감기 당일 대비 고점 배수 (데이터가 있는 반감기만)
     print("\n[반감기 당일 가격 대비 사이클 고점 배수]")
@@ -184,7 +193,7 @@ def q1_cycle(btc):
                     fontsize=9, color=TEXT)
     ax.set_title("비트코인 가격 (로그 스케일)과 반감기")
     ax.legend(loc="lower right")
-    add_source(fig, "출처: Binance BTCUSDT 일봉 (2017-08-17 ~ 2025-12-31)")
+    add_source(fig, f"출처: Binance BTCUSDT 일봉 ({close.index[0].date()} ~ {close.index[-1].date()})")
     save(fig, "fig1_price_halving.png")
 
     # 그래프 2: 반감기 기준으로 사이클 겹쳐 보기 (반감기 당일 가격 = 1)
@@ -249,7 +258,7 @@ def q2_volatility(btc):
     })
     print("\n[연도별 변동성]")
     print(yearly.round(2).to_string())
-    print("  * 2017년은 8/17부터라 일수가 적음")
+    print("  * 2017년(8/17~)과 2026년(~10/13)은 일부 기간만 포함")
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 7.2), height_ratios=[3, 2])
     ax1.plot(vol30.index, vol30, color=BLUE, linewidth=1.2, label="30일 롤링 변동성(연율화)")
@@ -268,7 +277,7 @@ def q2_volatility(btc):
     ax2.grid(axis="x", visible=False)
     ax2.set_ylim(0, yearly["|수익률|≥5% 일수"].max() * 1.18)
     fig.tight_layout(rect=(0, 0.03, 1, 1))
-    add_source(fig, "출처: Binance BTCUSDT 일봉. 2017년은 8/17~12/31 (137일)")
+    add_source(fig, "출처: Binance BTCUSDT 일봉. 2017년은 8/17~12/31, 2026년은 1/1~10/13 (일부 기간)")
     save(fig, "fig4_volatility.png")
 
 
@@ -298,7 +307,7 @@ def q3_external(btc, nasdaq, rate):
 
     # 보조 검증: 주간 수익률(금요일 종가 기준)로도 계산
     weekly = prices.resample("W-FRI").last().pct_change().dropna()
-    # 마지막 주(2025-12-29~31)는 2026-01-02(금)로 라벨이 붙으므로 제외
+    # 마지막 주가 금요일 전에 끝나면 라벨이 데이터 끝보다 뒤 날짜로 붙으므로 제외
     weekly = weekly[weekly.index <= prices.index[-1]]
     yearly_corr = rets.groupby(rets.index.year).apply(lambda g: g["btc"].corr(g["nasdaq"]))
     yearly_corr_w = weekly.groupby(weekly.index.year).apply(lambda g: g["btc"].corr(g["nasdaq"]))
@@ -319,7 +328,9 @@ def q3_external(btc, nasdaq, rate):
             "기간": f"{start} ~ {end}",
             "평균 금리(%)": rate["fed_rate"].loc[start:end].mean(),
             "BTC 기간 수익률(%)": (p.iloc[-1] / p.iloc[0] - 1) * 100,
-            "BTC 연환산 수익률(%)": ((p.iloc[-1] / p.iloc[0]) ** (DAYS_PER_YEAR / days) - 1) * 100,
+            # 90일 미만 국면은 1년으로 늘려 계산하면 값이 과장되므로 연환산하지 않음
+            "BTC 연환산 수익률(%)": ((p.iloc[-1] / p.iloc[0]) ** (DAYS_PER_YEAR / days) - 1) * 100
+                                    if days >= 90 else np.nan,
             "BTC 연율화 변동성(%)": r.std() * np.sqrt(DAYS_PER_YEAR),
             "나스닥 상관계수": rr["btc"].corr(rr["nasdaq"]),
         })
@@ -331,7 +342,8 @@ def q3_external(btc, nasdaq, rate):
     fig, ax = plt.subplots(figsize=(11, 4.6))
     ax.plot(roll_corr.index, roll_corr, color=BLUE, linewidth=1.4, label="90거래일 롤링 상관계수")
     for y, v in yearly_corr.items():
-        ax.hlines(v, max(pd.Timestamp(f"{y}-01-01"), rets.index[0]), pd.Timestamp(f"{y}-12-31"),
+        ax.hlines(v, max(pd.Timestamp(f"{y}-01-01"), rets.index[0]),
+                  min(pd.Timestamp(f"{y}-12-31"), rets.index[-1]),
                   color=ORANGE, linewidth=2.2, label="연도별 상관계수" if y == yearly_corr.index[0] else None)
     ax.axhline(0, color=GRAY, linewidth=0.8)
     ax.set_ylim(-0.4, 0.9)
@@ -341,15 +353,17 @@ def q3_external(btc, nasdaq, rate):
     save(fig, "fig5_nasdaq_corr.png")
 
     # 그래프 6: 가격과 금리를 위아래로 (y축 2개를 겹치지 않고 패널을 나눔)
-    regime_color = {"인상기 1": ORANGE, "인상기 2": ORANGE, "고금리 동결": YELLOW,
-                    "동결": GRAY, "인하기 1": BLUE, "인하기 2": BLUE, "제로금리": AQUA}
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 7), sharex=True, height_ratios=[3, 1.6])
     for start, end, name in RATE_REGIMES:
         for ax in (ax1, ax2):
-            ax.axvspan(pd.Timestamp(start), pd.Timestamp(end), color=regime_color[name],
+            ax.axvspan(pd.Timestamp(start), pd.Timestamp(end), color=REGIME_COLOR[name],
                        alpha=0.12, linewidth=0)
         mid = pd.Timestamp(start) + (pd.Timestamp(end) - pd.Timestamp(start)) / 2
-        ax2.text(mid, 6.1, name, ha="center", va="bottom", fontsize=8.5, color=TEXT)
+        if (pd.Timestamp(end) - pd.Timestamp(start)).days < 90:
+            # 짧은 국면은 이름이 옆 국면과 겹치지 않도록 한 줄 아래, 오른쪽 끝에 맞춘다
+            ax2.text(pd.Timestamp(end), 5.3, name, ha="right", va="bottom", fontsize=8.5, color=TEXT)
+        else:
+            ax2.text(mid, 6.1, name, ha="center", va="bottom", fontsize=8.5, color=TEXT)
     ax1.plot(btc.index, btc["close"], color=BLUE, linewidth=1.2)
     ax1.set_yscale("log")
     ax1.yaxis.set_major_formatter(price_fmt)

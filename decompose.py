@@ -76,6 +76,9 @@ def main():
 
     # 교차 확인: 달력 월별 수익률 (월말 종가 기준)
     monthly = btc["close"].resample("ME").last().pct_change().dropna() * 100
+    # 데이터가 월말 전에 끝나면 마지막 달은 한 달치가 아니므로 제외 (예: 2026-10은 1~13일뿐)
+    if not btc.index[-1].is_month_end:
+        monthly = monthly.iloc[:-1]
     g = monthly.groupby(monthly.index.month)
     cross = pd.DataFrame({
         "평균(%)": g.mean(), "중앙값(%)": g.median(),
